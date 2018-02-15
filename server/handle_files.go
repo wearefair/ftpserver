@@ -19,20 +19,22 @@ func (c *clientHandler) handleAPPE() {
 
 // Handles both the "STOR" and "APPE" commands
 func (c *clientHandler) handleStoreAndAppend(append bool) {
-	file, err := c.openFile(c.absPath(c.param), append)
+	tr, err := c.TransferOpen()
+	if err != nil {
+		c.writeMessage(550, "Could not open transfer: "+err.Error())
+		return
+	}
 
+	defer c.TransferClose()
+
+	file, err := c.openFile(c.absPath(c.param), append)
 	if err != nil {
 		c.writeMessage(550, "Could not open file: "+err.Error())
 		return
 	}
 
-	if tr, err := c.TransferOpen(); err == nil {
-		defer c.TransferClose()
-		if _, err := c.storeOrAppend(tr, file); err != nil && err != io.EOF {
-			c.writeMessage(550, err.Error())
-		}
-	} else {
-		c.writeMessage(550, "Could not open transfer: "+err.Error())
+	if _, err := c.storeOrAppend(tr, file); err != nil && err != io.EOF {
+		c.writeMessage(550, err.Error())
 	}
 }
 
