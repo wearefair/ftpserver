@@ -86,6 +86,11 @@ func (c *clientHandler) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+// LocalAddr returns the local network address.
+func (c *clientHandler) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
 func (c *clientHandler) end() {
 	c.daddy.driver.UserLeft(c)
 	c.daddy.clientDeparture(c)
@@ -113,15 +118,39 @@ func (c *clientHandler) HandleCommands() {
 			return
 		}
 
+		// florent(2018-01-14): #58: IDLE timeout: Preparing the deadline before we read
+		if c.daddy.settings.IdleTimeout > 0 {
+			c.conn.SetDeadline(time.Now().Add(time.Duration(time.Second.Nanoseconds() * int64(c.daddy.settings.IdleTimeout))))
+		}
+
 		line, err := c.reader.ReadString('\n')
 
 		if err != nil {
-			if err == io.EOF {
-				if c.debug {
-					level.Debug(c.logger).Log(logKeyMsg, "TCP disconnect", logKeyAction, "ftp.disconnect", "clean", false)
+			// florent(2018-01-14): #58: IDLE timeout: Adding some code to deal with the deadline
+			switch err := err.(type) {
+			case net.Error:
+				if err.Timeout() {
+					// We have to extend the deadline now
+					c.conn.SetDeadline(time.Now().Add(time.Minute))
+					level.Info(c.logger).Log(logKeyMsg, "IDLE timeout", logKeyAction, "ftp.idle_timeout", "err", err)
+					c.writeMessage(421, fmt.Sprintf("command timeout (%d seconds): closing control connection", c.daddy.settings.IdleTimeout))
+					if err := c.writer.Flush(); err != nil {
+						level.Error(c.logger).Log(logKeyMsg, "Network flush error", logKeyAction, "ftp.flush_error", "err", err)
+					}
+					if err := c.conn.Close(); err != nil {
+						level.Error(c.logger).Log(logKeyMsg, "Network close error", logKeyAction, "ftp.close_error", "err", err)
+					}
+					break
 				}
-			} else {
-				level.Error(c.logger).Log(logKeyMsg, "Read error", logKeyAction, "ftp.read_error", "err", err)
+				level.Error(c.logger).Log(logKeyMsg, "Network error", logKeyAction, "ftp.net_error", "err", err)
+			default:
+				if err == io.EOF {
+					if c.debug {
+						level.Debug(c.logger).Log(logKeyMsg, "TCP disconnect", logKeyAction, "ftp.disconnect", "clean", false)
+					}
+				} else {
+					level.Error(c.logger).Log(logKeyMsg, "Read error", logKeyAction, "ftp.read_error", "err", err)
+				}
 			}
 			return
 		}
@@ -188,7 +217,7 @@ func (c *clientHandler) TransferOpen() (net.Conn, error) {
 
 func (c *clientHandler) TransferClose() {
 	if c.transfer != nil {
-		c.writeMessage(226, "Closing transfer connection")
+		c.writeMessage(226, "transfer complete")
 		c.transfer.Close()
 		c.transfer = nil
 		if c.debug {

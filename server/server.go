@@ -66,6 +66,7 @@ func init() {
 	commandsMap["NLST"] = &CommandDescription{Fn: (*clientHandler).handleLIST}
 	commandsMap["LIST"] = &CommandDescription{Fn: (*clientHandler).handleLIST}
 	commandsMap["MLSD"] = &CommandDescription{Fn: (*clientHandler).handleMLSD}
+	commandsMap["MLST"] = &CommandDescription{Fn: (*clientHandler).handleMLST}
 	commandsMap["MKD"] = &CommandDescription{Fn: (*clientHandler).handleMKD}
 	commandsMap["RMD"] = &CommandDescription{Fn: (*clientHandler).handleRMD}
 
@@ -94,8 +95,13 @@ func (server *FtpServer) loadSettings() error {
 		return err
 	}
 
-	if s.ListenAddr == "" {
+	if s.Listener == nil && s.ListenAddr == "" {
 		s.ListenAddr = "0.0.0.0:2121"
+	}
+
+	// florent(2018-01-14): #58: IDLE timeout: Default idle timeout will be set at 900 seconds
+	if s.IdleTimeout == 0 {
+		s.IdleTimeout = 900
 	}
 
 	server.settings = s
@@ -112,14 +118,15 @@ func (server *FtpServer) Listen() error {
 		return fmt.Errorf("could not load settings: %v", err)
 	}
 
-	server.listener, err = net.Listen(
-		"tcp",
-		server.settings.ListenAddr,
-	)
+	if server.settings.Listener != nil {
+		server.listener = server.settings.Listener
+	} else {
+		server.listener, err = net.Listen("tcp", server.settings.ListenAddr)
 
-	if err != nil {
-		level.Error(server.Logger).Log(logKeyMsg, "Cannot listen", "err", err)
-		return err
+		if err != nil {
+			level.Error(server.Logger).Log(logKeyMsg, "Cannot listen", "err", err)
+			return err
+		}
 	}
 
 	level.Info(server.Logger).Log(logKeyMsg, "Listening...", logKeyAction, "ftp.listening", "address", server.listener.Addr())

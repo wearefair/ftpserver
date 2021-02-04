@@ -24,12 +24,13 @@ Note: this is a fork of [andrewarrow/paradise_ftp](https://github.com/andrewarro
  * Small memory footprint
  * Only relies on the standard library except for logging which uses [go-kit log](https://github.com/go-kit/kit/tree/master/log).
  * Supported extensions:
-   * [MDTM](https://tools.ietf.org/html/rfc3659#page-8) - File Modification Time
-   * [MLST](https://tools.ietf.org/html/rfc3659#page-23) - Directory listing for maching processing
-   * [REST](https://tools.ietf.org/html/rfc3659#page-13) - Restart of interrupted transfer
-   * [SIZE](https://tools.ietf.org/html/rfc3659#page-11) - Size of a string
    * [AUTH](https://tools.ietf.org/html/rfc2228#page-6) - Control session protection
    * [PROT](https://tools.ietf.org/html/rfc2228#page-8) - Transfer protection
+   * [MDTM](https://tools.ietf.org/html/rfc3659#page-8) - File Modification Time
+   * [SIZE](https://tools.ietf.org/html/rfc3659#page-11) - Size of a file
+   * [REST](https://tools.ietf.org/html/rfc3659#page-13) - Restart of interrupted transfer
+   * [MLST](https://tools.ietf.org/html/rfc3659#page-23) - Simple file listing for machine processing
+   * [MLSD](https://tools.ietf.org/html/rfc3659#page-23) - Directory listing for machine processing
 
 ## Quick test with docker
 
@@ -41,7 +42,7 @@ container (less than 15MB image, based on alpine):
 mkdir data
 
 # Starting the sample FTP server
-docker run -d -p 2121-2200:2121-2200 -v $(pwd)/data:/data fclairamb/ftpserver:travis-171
+docker run --rm -d -p 2121-2200:2121-2200 -v $(pwd)/data:/data fclairamb/ftpserver
 
 # Connecting to it and uploading a file
 ftp ftp://test:test@localhost:2121
